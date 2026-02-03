@@ -23,6 +23,11 @@ io.on("connection", (socket) => {
 
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("Realtime Notification Server is running 🚀");
+});
+
+
 app.post("/notify", (req, res) => {
   const { user_id, title, message } = req.body;
 
