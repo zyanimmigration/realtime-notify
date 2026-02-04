@@ -1,52 +1,72 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import cors from "cors";
 
 const app = express();
 const server = http.createServer(app);
 
-/* ===== SOCKET.IO ===== */
+/* ===============================
+   SOCKET.IO SETUP
+   =============================== */
 const io = new Server(server, {
-  cors: { origin: "*" }
-});
-
-/* ===== HEALTH CHECK ===== */
-app.get("/", (req, res) => {
-  res.send("Notification server running 🚀");
-});
-
-/* ===== API KEY CHECK ===== */
-function verifyApiKey(req, res, next) {
-  const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({ error: "Invalid API key" });
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
   }
-  next();
-}
-
-/* ===== SOCKET CONNECTION ===== */
-io.on("connection", (socket) => {
-  socket.on("register", (userId) => {
-    socket.join("user_" + userId);
-  });
 });
 
-/* ===== NOTIFY API ===== */
+/* ===============================
+   MIDDLEWARE
+   =============================== */
+app.use(cors());
 app.use(express.json());
 
-app.post("/notify", verifyApiKey, (req, res) => {
-  const { user_id, title, message } = req.body;
+/* ===============================
+   SOCKET CONNECTION
+   =============================== */
+io.on("connection", (socket) => {
+  console.log("🟢 socket connected:", socket.id);
 
-  io.to("user_" + user_id).emit("notification", {
-    title,
-    message
+  socket.on("register", (userId) => {
+    if (!userId) return;
+    const room = "user_" + userId;
+    socket.join(room);
+    console.log("👤 user registered:", room);
   });
+
+  socket.on("disconnect", () => {
+    console.log("🔴 socket disconnected:", socket.id);
+  });
+});
+
+/* ===============================
+   PHP → NODE NOTIFY ENDPOINT
+   =============================== */
+app.post("/notify", (req, res) => {
+  const { user_id, title, message, link } = req.body;
+
+  if (!user_id || !title || !message) {
+    return res.status(400).json({ success: false });
+  }
+
+  const room = "user_" + user_id;
+
+  io.to(room).emit("notification", {
+    title,
+    message,
+    link
+  });
+
+  console.log("📩 notification sent to", room);
 
   res.json({ success: true });
 });
 
-/* ===== START SERVER ===== */
+/* ===============================
+   START SERVER
+   =============================== */
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log("Running on port", PORT);
+  console.log("🚀 Realtime Notify running on port", PORT);
 });
