@@ -6,9 +6,6 @@ import cors from "cors";
 const app = express();
 const server = http.createServer(app);
 
-/* ===============================
-   SOCKET.IO SETUP
-   =============================== */
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -16,33 +13,15 @@ const io = new Server(server, {
   }
 });
 
-/* ===============================
-   MIDDLEWARE
-   =============================== */
 app.use(cors());
 app.use(express.json());
 
-/* ===============================
-   SOCKET CONNECTION
-   =============================== */
-io.on("connection", (socket) => {
-  console.log("🟢 socket connected:", socket.id);
-
-  socket.on("register", (userId) => {
-    if (!userId) return;
-    const room = "user_" + userId;
-    socket.join(room);
-    console.log("👤 user registered:", room);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("🔴 socket disconnected:", socket.id);
-  });
+/* 🔍 Health check */
+app.get("/", (req, res) => {
+  res.send("✅ Realtime Notify Server Running");
 });
 
-/* ===============================
-   PHP → NODE NOTIFY ENDPOINT
-   =============================== */
+/* 🔔 Receive from PHP & broadcast */
 app.post("/notify", (req, res) => {
   const { user_id, title, message, link } = req.body;
 
@@ -50,23 +29,28 @@ app.post("/notify", (req, res) => {
     return res.status(400).json({ success: false });
   }
 
-  const room = "user_" + user_id;
-
-  io.to(room).emit("notification", {
+  io.emit("notification", {
+    user_id,
     title,
     message,
     link
   });
 
-  console.log("📩 notification sent to", room);
+  console.log("📩 Notification broadcast for user:", user_id);
 
   res.json({ success: true });
 });
 
-/* ===============================
-   START SERVER
-   =============================== */
+/* 🔌 Socket connect */
+io.on("connection", (socket) => {
+  console.log("🟢 Socket connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 Socket disconnected:", socket.id);
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log("🚀 Realtime Notify running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
